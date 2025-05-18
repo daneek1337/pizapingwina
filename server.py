@@ -19,7 +19,7 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False)
     password = Column(String(100), nullable=False)
     name = Column(String(100), nullable=False)
-    uid = Column(String(36), unique=True, nullable=False)  # Уникальный UID
+    uid = Column(String(36), unique=True, nullable=False)
 
 class TelegramCode(Base):
     __tablename__ = 'telegram_codes'
@@ -31,7 +31,8 @@ class TelegramCode(Base):
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-BOT_USERNAME = '@pizdapingwina_bot'
+# Юзернейм бота без @
+BOT_USERNAME = 'pizdapingwina_bot'
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -46,7 +47,7 @@ def register():
         return jsonify({'error': 'Username уже занят'}), 400
     
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    uid = str(uuid.uuid4())  # Генерируем уникальный UID
+    uid = str(uuid.uuid4())
     user = User(username=username, password=hashed_password, name=name, uid=uid)
     session.add(user)
     session.commit()
