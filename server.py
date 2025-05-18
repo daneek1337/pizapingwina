@@ -96,7 +96,7 @@ def login():
 def verify_telegram_code():
     data = request.json
     code = data.get('code')
-    chat_id = data.get('chat_id')  # Получаем chat_id от бота
+    chat_id = data.get('chat_id')
     
     session = Session()
     telegram_code = session.query(TelegramCode).filter_by(code=code).first()
@@ -109,7 +109,6 @@ def verify_telegram_code():
         session.close()
         return jsonify({'error': 'Пользователь не найден'}), 404
     
-    # Сохраняем chat_id
     user.chat_id = str(chat_id)
     session.delete(telegram_code)
     session.commit()
@@ -134,18 +133,28 @@ def send_message():
         session.close()
         return jsonify({'error': 'Пользователь с таким username не найден'}), 404
     
-    # Отправляем сообщение через Telegram
-    if user.chat_id:
-        try:
-            requests.get(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage', params={
+    if not user.chat_id:
+        session.close()
+        return jsonify({'error': 'Пользователь не подтвердил Telegram'}), 400
+    
+    # Отправляем сообщение в ЛС через Telegram
+    try:
+        telegram_response = requests.get(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
+            params={
                 'chat_id': user.chat_id,
                 'text': f'Новое сообщение: {message}'
-            })
-        except Exception as e:
-            print(f"Ошибка отправки в Telegram: {e}")
+            }
+        )
+        if telegram_response.status_code != 200:
+            session.close()
+            return jsonify({'error': 'Ошибка отправки сообщения в Telegram'}), 500
+    except Exception as e:
+        session.close()
+        return jsonify({'error': f'Ошибка отправки в Telegram: {str(e)}'}), 500
     
     response = {
-        'message': f'Сообщение для {user.name}: {message}',
+        'message': f'Сообщение для {user.name}: {message} отправлено в Telegram',
         'username': username
     }
     
