@@ -32,7 +32,7 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
 BOT_USERNAME = 'pizdapingwina_bot'
-BOT_TOKEN = 'твой_токен_бота'  # Замени на токен @pizdapingwina_bot
+BOT_TOKEN = '7105651469:AAFXZkFHzIgxAhP-iOxSsfKn4VuxXmC8F_w'  # Замени на токен @pizdapingwina_bot
 
 @app.route('/register', methods=['POST'])
 def register():
