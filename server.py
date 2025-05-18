@@ -57,12 +57,14 @@ def register():
     session.add(telegram_code)
     session.commit()
     
-    session.close()
-    return jsonify({
+    response = {
         'message': f'Пользователь {name} успешно зарегистрирован!',
         'telegram_code': f'https://t.me/{BOT_USERNAME}?start={code}',
         'uid': uid
-    }), 201
+    }
+    
+    session.close()
+    return jsonify(response), 201
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -79,12 +81,16 @@ def login():
         session.add(telegram_code)
         session.commit()
         
-        session.close()
-        return jsonify({
+        # Формируем ответ до закрытия сессии
+        response = {
             'message': f'Вход успешен! Привет, {user.name}!',
             'telegram_code': f'https://t.me/{BOT_USERNAME}?start={code}',
             'uid': user.uid
-        }), 200
+        }
+        
+        # Теперь закрываем сессию
+        session.close()
+        return jsonify(response), 200
     session.close()
     return jsonify({'error': 'Неправильный username или пароль'}), 401
 
@@ -104,17 +110,14 @@ def verify_telegram_code():
         session.close()
         return jsonify({'error': 'Пользователь не найден'}), 404
     
-    # Удаляем код и сохраняем изменения
     session.delete(telegram_code)
     session.commit()
     
-    # Формируем ответ до закрытия сессии
     response = {
         'message': f'Аутентификация успешна! Пользователь: {user.name}',
         'uid': user.uid
     }
     
-    # Теперь можно закрыть сессию
     session.close()
     return jsonify(response), 200
 
@@ -130,11 +133,13 @@ def send_message():
         session.close()
         return jsonify({'error': 'Пользователь с таким UID не найден'}), 404
     
-    session.close()
-    return jsonify({
+    response = {
         'message': f'Сообщение для {user.name}: {message}',
         'uid': uid
-    }), 200
+    }
+    
+    session.close()
+    return jsonify(response), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
