@@ -31,7 +31,6 @@ class TelegramCode(Base):
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-# Юзернейм бота без @
 BOT_USERNAME = 'pizdapingwina_bot'
 
 @app.route('/register', methods=['POST'])
@@ -101,13 +100,23 @@ def verify_telegram_code():
         return jsonify({'error': 'Код недействителен или истёк'}), 400
     
     user = session.query(User).filter_by(id=telegram_code.user_id).first()
+    if not user:
+        session.close()
+        return jsonify({'error': 'Пользователь не найден'}), 404
+    
+    # Удаляем код и сохраняем изменения
     session.delete(telegram_code)
     session.commit()
-    session.close()
-    return jsonify({
+    
+    # Формируем ответ до закрытия сессии
+    response = {
         'message': f'Аутентификация успешна! Пользователь: {user.name}',
         'uid': user.uid
-    }), 200
+    }
+    
+    # Теперь можно закрыть сессию
+    session.close()
+    return jsonify(response), 200
 
 @app.route('/message', methods=['POST'])
 def send_message():
