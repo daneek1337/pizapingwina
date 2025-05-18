@@ -6,7 +6,7 @@ import bcrypt
 import secrets
 import time
 import os
-import uuid
+import requests
 
 app = Flask(__name__)
 DATABASE_URL = 'sqlite:///users.db'
@@ -19,7 +19,7 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False)
     password = Column(String(100), nullable=False)
     name = Column(String(100), nullable=False)
-    uid = Column(String(36), unique=True, nullable=False)
+    chat_id = Column(String(50), nullable=True)  # Telegram chat_id
 
 class TelegramCode(Base):
     __tablename__ = 'telegram_codes'
@@ -32,6 +32,7 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
 BOT_USERNAME = 'pizdapingwina_bot'
+BOT_TOKEN = 'твой_токен_бота'  # Замени на токен @pizdapingwina_bot
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -46,8 +47,7 @@ def register():
         return jsonify({'error': 'Username уже занят'}), 400
     
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    uid = str(uuid.uuid4())
-    user = User(username=username, password=hashed_password, name=name, uid=uid)
+    user = User(username=username, password=hashed_password, name=name)
     session.add(user)
     session.commit()
     
@@ -60,7 +60,7 @@ def register():
     response = {
         'message': f'Пользователь {name} успешно зарегистрирован!',
         'telegram_code': f'https://t.me/{BOT_USERNAME}?start={code}',
-        'uid': uid
+        'username': username
     }
     
     session.close()
@@ -81,14 +81,12 @@ def login():
         session.add(telegram_code)
         session.commit()
         
-        # Формируем ответ до закрытия сессии
         response = {
             'message': f'Вход успешен! Привет, {user.name}!',
             'telegram_code': f'https://t.me/{BOT_USERNAME}?start={code}',
-            'uid': user.uid
+            'username': user.username
         }
         
-        # Теперь закрываем сессию
         session.close()
         return jsonify(response), 200
     session.close()
@@ -98,6 +96,7 @@ def login():
 def verify_telegram_code():
     data = request.json
     code = data.get('code')
+    chat_id = data.get('chat_id')  # Получаем chat_id от бота
     
     session = Session()
     telegram_code = session.query(TelegramCode).filter_by(code=code).first()
@@ -110,12 +109,14 @@ def verify_telegram_code():
         session.close()
         return jsonify({'error': 'Пользователь не найден'}), 404
     
+    # Сохраняем chat_id
+    user.chat_id = str(chat_id)
     session.delete(telegram_code)
     session.commit()
     
     response = {
         'message': f'Аутентификация успешна! Пользователь: {user.name}',
-        'uid': user.uid
+        'username': user.username
     }
     
     session.close()
@@ -124,18 +125,28 @@ def verify_telegram_code():
 @app.route('/message', methods=['POST'])
 def send_message():
     data = request.json
-    uid = data.get('uid')
+    username = data.get('username')
     message = data.get('message')
     
     session = Session()
-    user = session.query(User).filter_by(uid=uid).first()
+    user = session.query(User).filter_by(username=username).first()
     if not user:
         session.close()
-        return jsonify({'error': 'Пользователь с таким UID не найден'}), 404
+        return jsonify({'error': 'Пользователь с таким username не найден'}), 404
+    
+    # Отправляем сообщение через Telegram
+    if user.chat_id:
+        try:
+            requests.get(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage', params={
+                'chat_id': user.chat_id,
+                'text': f'Новое сообщение: {message}'
+            })
+        except Exception as e:
+            print(f"Ошибка отправки в Telegram: {e}")
     
     response = {
         'message': f'Сообщение для {user.name}: {message}',
-        'uid': uid
+        'username': username
     }
     
     session.close()
