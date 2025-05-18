@@ -1,0 +1,4 @@
+flask==2.3.3
+sqlalchemy==2.0.31
+bcrypt==4.2.0
+gunicorn==22.0.0
