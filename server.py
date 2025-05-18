@@ -6,6 +6,7 @@ import bcrypt
 import secrets
 import time
 import os
+import uuid
 
 app = Flask(__name__)
 DATABASE_URL = 'sqlite:///users.db'
@@ -15,9 +16,10 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
-    email = Column(String(100), unique=True, nullable=False)
+    username = Column(String(100), unique=True, nullable=False)
     password = Column(String(100), nullable=False)
     name = Column(String(100), nullable=False)
+    uid = Column(String(36), unique=True, nullable=False)  # Уникальный UID
 
 class TelegramCode(Base):
     __tablename__ = 'telegram_codes'
@@ -29,23 +31,23 @@ class TelegramCode(Base):
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-# Юзернейм твоего бота
 BOT_USERNAME = '@pizdapingwina_bot'
 
 @app.route('/register', methods=['POST'])
 def register():
     data = request.json
-    email = data.get('email')
+    username = data.get('username')
     password = data.get('password')
     name = data.get('name')
     
     session = Session()
-    if session.query(User).filter_by(email=email).first():
+    if session.query(User).filter_by(username=username).first():
         session.close()
-        return jsonify({'error': 'Email уже занят'}), 400
+        return jsonify({'error': 'Username уже занят'}), 400
     
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    user = User(email=email, password=hashed_password, name=name)
+    uid = str(uuid.uuid4())  # Генерируем уникальный UID
+    user = User(username=username, password=hashed_password, name=name, uid=uid)
     session.add(user)
     session.commit()
     
@@ -58,17 +60,18 @@ def register():
     session.close()
     return jsonify({
         'message': f'Пользователь {name} успешно зарегистрирован!',
-        'telegram_code': f'https://t.me/{BOT_USERNAME}?start={code}'
+        'telegram_code': f'https://t.me/{BOT_USERNAME}?start={code}',
+        'uid': uid
     }), 201
 
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json
-    email = data.get('email')
+    username = data.get('username')
     password = data.get('password')
     
     session = Session()
-    user = session.query(User).filter_by(email=email).first()
+    user = session.query(User).filter_by(username=username).first()
     if user and bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
         code = secrets.token_hex(16)
         expires_at = int(time.time()) + 3600
@@ -79,10 +82,11 @@ def login():
         session.close()
         return jsonify({
             'message': f'Вход успешен! Привет, {user.name}!',
-            'telegram_code': f'https://t.me/{BOT_USERNAME}?start={code}'
+            'telegram_code': f'https://t.me/{BOT_USERNAME}?start={code}',
+            'uid': user.uid
         }), 200
     session.close()
-    return jsonify({'error': 'Неправильный email или пароль'}), 401
+    return jsonify({'error': 'Неправильный username или пароль'}), 401
 
 @app.route('/verify_telegram_code', methods=['POST'])
 def verify_telegram_code():
@@ -99,7 +103,28 @@ def verify_telegram_code():
     session.delete(telegram_code)
     session.commit()
     session.close()
-    return jsonify({'message': f'Аутентификация успешна! Пользователь: {user.name}'}), 200
+    return jsonify({
+        'message': f'Аутентификация успешна! Пользователь: {user.name}',
+        'uid': user.uid
+    }), 200
+
+@app.route('/message', methods=['POST'])
+def send_message():
+    data = request.json
+    uid = data.get('uid')
+    message = data.get('message')
+    
+    session = Session()
+    user = session.query(User).filter_by(uid=uid).first()
+    if not user:
+        session.close()
+        return jsonify({'error': 'Пользователь с таким UID не найден'}), 404
+    
+    session.close()
+    return jsonify({
+        'message': f'Сообщение для {user.name}: {message}',
+        'uid': uid
+    }), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
